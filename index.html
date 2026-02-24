@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ask.</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --black: #080808;
+      --white: #f5f5f5;
+      --dim: #222222;
+      --accent: #ffffff;
+      --muted: #555555;
+      --danger: #888888;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--black);
+      color: var(--white);
+      font-family: 'Cormorant Garamond', serif;
+      overflow: hidden;
+    }
+
+    /* NOISE OVERLAY */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.4;
+    }
+
+    /* SCREENS */
+    .screen {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.8s ease;
+    }
+    .screen.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    /* AMBIENT BACKGROUND */
+    .ambient {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background: var(--black);
+    }
+
+    /* LANDING */
+    #screen-landing {
+      text-align: left;
+      align-items: flex-start;
+      padding-left: clamp(2rem, 10vw, 8rem);
+      gap: 1.5rem;
+    }
+
+    .logo {
+      font-family: 'Space Mono', monospace;
+      font-size: clamp(4rem, 12vw, 9rem);
+      font-weight: 700;
+      letter-spacing: -0.05em;
+      color: var(--white);
+      line-height: 1;
+      position: relative;
+    }
+    .logo span {
+      color: var(--accent);
+    }
+
+    .tagline {
+      font-size: clamp(1rem, 2.5vw, 1.4rem);
+      font-style: italic;
+      color: var(--accent);
+      letter-spacing: 0.05em;
+      font-weight: 300;
+    }
+
+    .landing-sub {
+      font-size: clamp(0.85rem, 1.5vw, 1rem);
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      line-height: 1.8;
+    }
+
+    /* BUTTONS */
+    .btn {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      background: transparent;
+      padding: 1rem 2.5rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--accent);
+      transform: translateX(-101%);
+      transition: transform 0.3s ease;
+      z-index: -1;
+    }
+    .btn:hover::before { transform: translateX(0); }
+    .btn:hover { color: var(--black); }
+    .btn-ghost {
+      border-color: var(--muted);
+      color: var(--muted);
+    }
+    .btn-ghost::before { background: var(--muted); }
+    .btn-ghost:hover { color: var(--black); }
+
+    /* AUTH SCREEN */
+    #screen-auth {
+      gap: 2rem;
+      max-width: 420px;
+      width: 100%;
+    }
+    .screen-title {
+      font-size: clamp(1.5rem, 4vw, 2.2rem);
+      font-weight: 300;
+      text-align: center;
+      letter-spacing: 0.02em;
+    }
+    .screen-title em {
+      font-style: italic;
+      color: var(--accent);
+    }
+    .screen-sub {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      text-align: center;
+    }
+
+    .input-wrap {
+      width: 100%;
+      position: relative;
+    }
+    .input-wrap input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--dim);
+      color: var(--white);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.85rem;
+      padding: 0.75rem 0;
+      outline: none;
+      transition: border-color 0.3s ease;
+      letter-spacing: 0.05em;
+    }
+    .input-wrap input:focus { border-bottom-color: var(--accent); }
+    .input-wrap input::placeholder { color: var(--muted); }
+
+    .auth-note {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.8;
+      letter-spacing: 0.05em;
+    }
+
+    /* ROLE SCREEN */
+    #screen-role {
+      gap: 3rem;
+      max-width: 600px;
+      width: 100%;
+    }
+    .role-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      width: 100%;
+    }
+    .role-card {
+      border: 1px solid var(--dim);
+      padding: 2rem 1.5rem;
+      cursor: pointer;
+      transition: all 0.4s ease;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .role-card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--accent);
+      opacity: 0;
+      transition: opacity 0.4s ease;
+      z-index: -1;
+    }
+    .role-card:hover { border-color: var(--accent); }
+    .role-card:hover::after { opacity: 0.05; }
+    .role-card.selected { border-color: var(--accent); }
+    .role-card.selected::after { opacity: 0.08; }
+
+    .role-symbol {
+      font-family: 'Space Mono', monospace;
+      font-size: 2rem;
+      color: var(--accent);
+    }
+    .role-name {
+      font-size: 1.4rem;
+      font-weight: 300;
+      letter-spacing: 0.05em;
+    }
+    .role-desc {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      line-height: 1.8;
+      text-transform: uppercase;
+    }
+
+    /* QUESTION SCREEN */
+    #screen-question {
+      gap: 2.5rem;
+      max-width: 560px;
+      width: 100%;
+    }
+    .question-prompt {
+      font-size: clamp(0.9rem, 2vw, 1.1rem);
+      font-style: italic;
+      color: var(--accent);
+      text-align: center;
+      line-height: 1.6;
+    }
+    .question-area {
+      width: 100%;
+      position: relative;
+    }
+    .question-area textarea {
+      width: 100%;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--dim);
+      color: var(--white);
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(1.1rem, 2.5vw, 1.4rem);
+      font-style: italic;
+      font-weight: 300;
+      padding: 1rem 0;
+      outline: none;
+      resize: none;
+      min-height: 120px;
+      transition: border-color 0.3s ease;
+      line-height: 1.6;
+    }
+    .question-area textarea:focus { border-bottom-color: var(--accent); }
+    .question-area textarea::placeholder { color: var(--muted); font-style: italic; }
+    .char-count {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--muted);
+      text-align: right;
+      margin-top: 0.5rem;
+      letter-spacing: 0.05em;
+    }
+
+    /* REFLECTION SCREEN */
+    #screen-reflection {
+      gap: 2.5rem;
+      max-width: 560px;
+      width: 100%;
+      text-align: center;
+    }
+    .stranger-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+    .stranger-question {
+      font-size: clamp(1.2rem, 3vw, 1.8rem);
+      font-style: italic;
+      font-weight: 300;
+      line-height: 1.5;
+      color: var(--white);
+      padding: 2rem;
+      border-left: 1px solid var(--accent);
+      border-right: 1px solid var(--accent);
+      text-align: center;
+      position: relative;
+    }
+    .stranger-question::before,
+    .stranger-question::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1px;
+      height: 1rem;
+      background: var(--accent);
+    }
+    .stranger-question::before { top: 0; }
+    .stranger-question::after { bottom: 0; }
+
+    /* WAITING SCREEN */
+    #screen-waiting {
+      gap: 2rem;
+      text-align: center;
+    }
+    .waiting-symbol {
+      font-family: 'Space Mono', monospace;
+      font-size: 3rem;
+      color: var(--accent);
+      animation: pulse 3s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+    .waiting-text {
+      font-size: 1.3rem;
+      font-style: italic;
+      font-weight: 300;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .waiting-sub {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--dim);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    /* SUCCESS SCREEN */
+    #screen-success {
+      gap: 2rem;
+      text-align: center;
+      max-width: 480px;
+    }
+    .success-symbol {
+      font-family: 'Space Mono', monospace;
+      font-size: 2rem;
+      color: var(--accent);
+    }
+    .success-title {
+      font-size: clamp(1.3rem, 3vw, 1.8rem);
+      font-style: italic;
+      font-weight: 300;
+      line-height: 1.5;
+    }
+    .success-sub {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      line-height: 1.8;
+      text-transform: uppercase;
+    }
+
+    /* TOAST */
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(4rem);
+      background: var(--dim);
+      color: var(--white);
+      font-family: 'Space Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      padding: 0.75rem 1.5rem;
+      border: 1px solid var(--muted);
+      transition: transform 0.4s ease;
+      z-index: 1000;
+      white-space: nowrap;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.error { border-color: var(--danger); color: #e08080; }
+
+    /* DIVIDER */
+    .divider {
+      width: 40px;
+      height: 1px;
+      background: var(--dim);
+    }
+
+    /* BACK BUTTON */
+    .back-btn {
+      position: fixed;
+      top: 2rem;
+      left: 2rem;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--muted);
+      background: none;
+      border: none;
+      cursor: pointer;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      transition: color 0.3s;
+      display: none;
+    }
+    .back-btn:hover { color: var(--accent); }
+    .back-btn.visible { display: block; }
+
+    /* LOADING */
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 1px solid var(--dim);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* CHECK EMAIL SCREEN */
+    #screen-checkemail {
+      gap: 2rem;
+      text-align: center;
+      max-width: 420px;
+    }
+
+    @media (max-width: 480px) {
+      .role-cards { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="ambient" id="ambient"></div>
+
+<!-- BACK BUTTON -->
+<button class="back-btn" id="backBtn" onclick="goBack()">← back</button>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- SCREEN: LANDING -->
+<div class="screen active" id="screen-landing">
+  <div class="logo">ask<span>.</span></div>
+  <div class="tagline">a question is enough.</div>
+
+  <button class="btn" onclick="showScreen('auth')">enter</button>
+</div>
+
+<!-- SCREEN: AUTH -->
+<div class="screen" id="screen-auth">
+  <div class="screen-title">enter with your <em>email</em></div>
+  <div class="divider"></div>
+  <div class="input-wrap">
+    <input type="email" id="emailInput" placeholder="your@email.com" />
+  </div>
+  <button class="btn" onclick="handleAuth()">send magic link</button>
+  <div class="auth-note">
+    we'll send you a one-click link.<br/>
+    no password. no data stored beyond what's necessary.
+  </div>
+</div>
+
+<!-- SCREEN: CHECK EMAIL -->
+<div class="screen" id="screen-checkemail">
+  <div class="success-symbol">✦</div>
+  <div class="screen-title">check your <em>inbox</em></div>
+  <div class="success-sub">
+    a magic link has been sent.<br/>
+    click it to enter ask.<br/><br/>
+    you may close this tab.
+  </div>
+</div>
+
+<!-- SCREEN: ROLE -->
+<div class="screen" id="screen-role">
+  <div class="screen-title">choose your <em>role</em></div>
+  <div class="screen-sub">you can only choose one per session</div>
+  <div class="role-cards">
+    <div class="role-card" id="card-I" onclick="selectRole('I')">
+      <div class="role-symbol">I</div>
+      <div class="role-name">release</div>
+      <div class="role-desc">ask the question<br/>you can't answer<br/>yourself</div>
+    </div>
+    <div class="role-card" id="card-You" onclick="selectRole('You')">
+      <div class="role-symbol">You</div>
+      <div class="role-name">reflect</div>
+      <div class="role-desc">receive a stranger's<br/>question. respond<br/>with another</div>
+    </div>
+  </div>
+  <button class="btn" id="roleBtn" onclick="confirmRole()" style="opacity:0.3;pointer-events:none;">continue</button>
+</div>
+
+<!-- SCREEN: QUESTION (for "I" role) -->
+<div class="screen" id="screen-question">
+  <div class="screen-title">what is your <em>question?</em></div>
+  <div class="question-prompt">
+    the one you've been carrying.<br/>the one without an answer.
+  </div>
+  <div class="question-area">
+    <textarea id="questionInput" placeholder="why do I feel stuck even when things are fine..." maxlength="280" oninput="updateCount()"></textarea>
+    <div class="char-count"><span id="charCount">0</span> / 280</div>
+  </div>
+  <button class="btn" onclick="submitQuestion()">release it</button>
+</div>
+
+<!-- SCREEN: WAITING (after "I" submits) -->
+<div class="screen" id="screen-waiting">
+  <div class="waiting-symbol">◦</div>
+  <div class="screen-title">your question is <em>out there</em></div>
+  <div class="waiting-text">
+    a stranger is holding it now.<br/>
+    they will reflect it back to you.
+  </div>
+  <div class="waiting-sub">check back tomorrow</div>
+  <button class="btn-ghost btn" onclick="checkForReflection()">check for reflection</button>
+</div>
+
+<!-- SCREEN: REFLECTION (for "You" role) -->
+<div class="screen" id="screen-reflection">
+  <div class="stranger-label">a stranger asks</div>
+  <div class="stranger-question" id="strangerQuestion">loading...</div>
+  <div class="screen-sub">reflect with another question. not an answer.</div>
+  <div class="question-area">
+    <textarea id="reflectionInput" placeholder="what would change if you stopped waiting for things to feel different..." maxlength="280" oninput="updateReflectionCount()"></textarea>
+    <div class="char-count"><span id="reflectionCount">0</span> / 280</div>
+  </div>
+  <button class="btn" onclick="submitReflection()">send reflection</button>
+</div>
+
+<!-- SCREEN: SUCCESS -->
+<div class="screen" id="screen-success">
+  <div class="success-symbol">✦</div>
+  <div class="success-title" id="successTitle">your reflection<br/>has been <em>sent</em></div>
+  <div class="success-sub" id="successSub">
+    a stranger will receive it.<br/>
+    they'll never know who you are.<br/>
+    that's the point.
+  </div>
+  <button class="btn" onclick="showScreen('role')">ask again</button>
+</div>
+
+<script>
+  // ── SUPABASE INIT ──────────────────────────────────────────────
+  const SUPABASE_URL = 'https://xembakjuxhpbgkgxsmbj.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhlbWJha2p1eGhwYmdrZ3hzbWJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5MjMwNjAsImV4cCI6MjA4NzQ5OTA2MH0.uSRAq9byor3uTKn8VB2jVIfb_BJ-eziObOuwhvfs9Ns';
+  const { createClient } = supabase;
+  const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // ── STATE ──────────────────────────────────────────────────────
+  let currentScreen = 'landing';
+  let selectedRole = null;
+  let currentUser = null;
+  let currentQuestionId = null;
+  let screenHistory = [];
+
+  // ── INIT ───────────────────────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', async () => {
+    const { data: { session } } = await db.auth.getSession();
+    if (session) {
+      currentUser = session.user;
+      showScreen('role');
+    }
+
+    db.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        currentUser = session.user;
+        showScreen('role');
+      }
+    });
+  });
+
+  // ── NAVIGATION ─────────────────────────────────────────────────
+  function showScreen(name) {
+    if (currentScreen !== name) screenHistory.push(currentScreen);
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-' + name).classList.add('active');
+    currentScreen = name;
+
+    const backBtn = document.getElementById('backBtn');
+    if (['landing', 'role', 'waiting', 'success', 'checkemail'].includes(name)) {
+      backBtn.classList.remove('visible');
+    } else {
+      backBtn.classList.add('visible');
+    }
+  }
+
+  function goBack() {
+    if (screenHistory.length > 0) {
+      const prev = screenHistory.pop();
+      showScreen(prev);
+      screenHistory.pop(); // remove the one showScreen just pushed
+    }
+  }
+
+  // ── AUTH ───────────────────────────────────────────────────────
+  async function handleAuth() {
+    const email = document.getElementById('emailInput').value.trim();
+    if (!email || !email.includes('@')) {
+      showToast('please enter a valid email', true); return;
+    }
+
+    const btn = event.target;
+    btn.innerHTML = '<span class="loading"></span>';
+    btn.style.pointerEvents = 'none';
+
+    const { error } = await db.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.href }
+    });
+
+    btn.innerHTML = 'send magic link';
+    btn.style.pointerEvents = 'all';
+
+    if (error) { showToast('something went wrong. try again.', true); return; }
+    showScreen('checkemail');
+  }
+
+  // ── ROLE ───────────────────────────────────────────────────────
+  function selectRole(role) {
+    selectedRole = role;
+    document.querySelectorAll('.role-card').forEach(c => c.classList.remove('selected'));
+    document.getElementById('card-' + role).classList.add('selected');
+    const btn = document.getElementById('roleBtn');
+    btn.style.opacity = '1';
+    btn.style.pointerEvents = 'all';
+  }
+
+  async function confirmRole() {
+    if (!selectedRole) return;
+    if (selectedRole === 'I') {
+      showScreen('question');
+    } else {
+      await loadStrangerQuestion();
+    }
+  }
+
+  // ── QUESTION SUBMISSION ────────────────────────────────────────
+  function updateCount() {
+    const val = document.getElementById('questionInput').value;
+    document.getElementById('charCount').textContent = val.length;
+  }
+
+  function updateReflectionCount() {
+    const val = document.getElementById('reflectionInput').value;
+    document.getElementById('reflectionCount').textContent = val.length;
+  }
+
+  function extractKeywords(text) {
+    const stopwords = new Set(['i','do','feel','why','what','when','how','is','are','the','a','an','and','or','but','in','on','at','to','for','of','with','my','me','it','this','that','be','was','have','has','can','will','just','even','things','fine','not','no','so','if','about','like','get','they','we','you','am','been','more','all','from','up','out','he','she','his','her','they','them','their','our','its','we']);
+    return text.toLowerCase()
+      .replace(/[^a-z\s]/g, '')
+      .split(/\s+/)
+      .filter(w => w.length > 3 && !stopwords.has(w))
+      .slice(0, 5);
+  }
+
+  async function submitQuestion() {
+    const content = document.getElementById('questionInput').value.trim();
+    if (!content || content.length < 10) {
+      showToast('your question needs a little more depth', true); return;
+    }
+    if (!content.trim().endsWith('?')) {
+      showToast('a question ends with a ?', true); return;
+    }
+
+    const btn = event.target;
+    btn.innerHTML = '<span class="loading"></span>';
+    btn.style.pointerEvents = 'none';
+
+    const keywords = extractKeywords(content);
+
+    const { data, error } = await db
+      .from('questions')
+      .insert({
+        user_id: currentUser?.id || null,
+        content,
+        role: 'I',
+        keywords,
+        status: 'pending'
+      })
+      .select()
+      .single();
+
+    btn.innerHTML = 'release it';
+    btn.style.pointerEvents = 'all';
+
+    if (error) { showToast('something went wrong. try again.', true); return; }
+    currentQuestionId = data.id;
+    showScreen('waiting');
+  }
+
+  // ── REFLECTION ─────────────────────────────────────────────────
+  async function loadStrangerQuestion() {
+    showScreen('reflection');
+    document.getElementById('strangerQuestion').textContent = '...';
+
+    // Find a pending "I" question not by this user
+    const { data, error } = await db
+      .from('questions')
+      .select('*')
+      .eq('role', 'I')
+      .eq('status', 'pending')
+      .neq('user_id', currentUser?.id || 'none')
+      .limit(20);
+
+    if (error || !data || data.length === 0) {
+      document.getElementById('strangerQuestion').textContent =
+        'no questions waiting right now. come back later.';
+      return;
+    }
+
+    // Pick randomly from available questions
+    const q = data[Math.floor(Math.random() * data.length)];
+    currentQuestionId = q.id;
+    document.getElementById('strangerQuestion').textContent = q.content;
+  }
+
+  async function submitReflection() {
+    const reflection = document.getElementById('reflectionInput').value.trim();
+    if (!reflection || reflection.length < 10) {
+      showToast('your reflection needs a little more depth', true); return;
+    }
+    if (!reflection.trim().endsWith('?')) {
+      showToast('a reflection is also a question — end with ?', true); return;
+    }
+    if (!currentQuestionId) { showToast('no question selected', true); return; }
+
+    const btn = event.target;
+    btn.innerHTML = '<span class="loading"></span>';
+    btn.style.pointerEvents = 'none';
+
+    const { error } = await db
+      .from('questions')
+      .update({ reflection, status: 'reflected' })
+      .eq('id', currentQuestionId);
+
+    btn.innerHTML = 'send reflection';
+    btn.style.pointerEvents = 'all';
+
+    if (error) { showToast('something went wrong. try again.', true); return; }
+
+    document.getElementById('successTitle').innerHTML = 'your reflection<br/>has been <em>sent</em>';
+    document.getElementById('successSub').textContent =
+      'a stranger will receive it.\nthey\'ll never know who you are.\nthat\'s the point.';
+    showScreen('success');
+    showToast('reflection sent ✦');
+  }
+
+  // ── CHECK FOR REFLECTION ───────────────────────────────────────
+  async function checkForReflection() {
+    if (!currentQuestionId) { showToast('submit a question first', true); return; }
+
+    const { data, error } = await db
+      .from('questions')
+      .select('reflection, status')
+      .eq('id', currentQuestionId)
+      .single();
+
+    if (error || !data) { showToast('could not check. try again.', true); return; }
+
+    if (data.status === 'reflected' && data.reflection) {
+      document.getElementById('successTitle').innerHTML =
+        'a stranger <em>reflected</em><br/>your question';
+      document.getElementById('successSub').textContent = '"' + data.reflection + '"';
+      showScreen('success');
+    } else {
+      showToast('no reflection yet. someone will respond soon.');
+    }
+  }
+
+  // ── TOAST ──────────────────────────────────────────────────────
+  function showToast(msg, isError = false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast' + (isError ? ' error' : '');
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  // ── AMBIENT BACKGROUND SHIFT ───────────────────────────────────
+  // Pure black — no color shifts
+</script>
+</body>
+</html>
