@@ -568,7 +568,7 @@
 <!-- SCREEN: ROLE -->
 <div class="screen" id="screen-role">
   <div class="screen-title">choose your <em>role</em></div>
-  <div class="screen-sub">you can only choose one per session</div>
+  <div class="screen-sub">this is who you are. switching roles is premium.</div>
   <div class="role-cards">
     <div class="role-card" id="card-I" onclick="selectRole('I')">
       <div class="role-symbol">I</div>
@@ -770,16 +770,19 @@
       showToast('a question ends with a ?', true); return;
     }
 
-    const btn = event.target;
+    const btn = document.querySelector('#screen-question .btn');
     btn.innerHTML = '<span class="loading"></span>';
     btn.style.pointerEvents = 'none';
 
     const keywords = extractKeywords(content);
 
+    const { data: { session } } = await db.auth.getSession();
+    const userId = session?.user?.id || null;
+
     const { data, error } = await db
       .from('questions')
       .insert({
-        user_id: currentUser?.id || null,
+        user_id: userId,
         content,
         role: 'I',
         keywords,
@@ -791,9 +794,11 @@
     btn.innerHTML = 'release it';
     btn.style.pointerEvents = 'all';
 
-    if (error) { showToast('something went wrong. try again.', true); return; }
+    if (error) { 
+      showToast('something went wrong: ' + error.message, true); 
+      return; 
+    }
     currentQuestionId = data.id;
-    // Show their own question back to them on the waiting screen
     document.getElementById('waitingYourQuestion').textContent = '"' + content + '"';
     showScreen('waiting');
   }
