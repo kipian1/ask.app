@@ -331,32 +331,99 @@
 
     /* WAITING SCREEN */
     #screen-waiting {
-      gap: 2rem;
+      gap: 2.5rem;
+      max-width: 520px;
+      width: 100%;
       text-align: center;
     }
-    .waiting-symbol {
+    .waiting-pulse {
       font-family: 'Space Mono', monospace;
-      font-size: 3rem;
-      color: var(--accent);
-      animation: pulse 3s ease-in-out infinite;
+      font-size: 2rem;
+      color: var(--white);
+      animation: pulse 4s ease-in-out infinite;
     }
     @keyframes pulse {
-      0%, 100% { opacity: 0.3; }
+      0%, 100% { opacity: 0.15; }
       50% { opacity: 1; }
     }
-    .waiting-text {
-      font-size: 1.3rem;
+    .waiting-your-question {
+      font-size: clamp(1.1rem, 2.5vw, 1.5rem);
       font-style: italic;
       font-weight: 300;
-      color: var(--muted);
+      color: var(--white);
       line-height: 1.6;
+      border-top: 1px solid var(--dim);
+      border-bottom: 1px solid var(--dim);
+      padding: 1.5rem 0;
+      opacity: 0.6;
     }
-    .waiting-sub {
+    .waiting-message {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(0.85rem, 1.8vw, 1rem);
+      color: var(--muted);
+      line-height: 2;
+      font-style: italic;
+    }
+    .waiting-label {
+      color: var(--white);
+      font-style: normal;
       font-family: 'Space Mono', monospace;
       font-size: 0.65rem;
-      color: var(--dim);
-      letter-spacing: 0.1em;
+      letter-spacing: 0.15em;
       text-transform: uppercase;
+    }
+    .waiting-divider {
+      width: 1px;
+      height: 40px;
+      background: var(--dim);
+      margin: 0 auto;
+    }
+
+    /* RECEIVED REFLECTION SCREEN */
+    #screen-received {
+      gap: 2.5rem;
+      max-width: 520px;
+      width: 100%;
+      text-align: center;
+    }
+    .received-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+    .received-question {
+      font-size: clamp(1.3rem, 3.5vw, 2rem);
+      font-style: italic;
+      font-weight: 300;
+      color: var(--white);
+      line-height: 1.5;
+      padding: 2.5rem 1rem;
+      position: relative;
+    }
+    .received-question::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 30px; height: 1px;
+      background: var(--white);
+    }
+    .received-question::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 30px; height: 1px;
+      background: var(--white);
+    }
+    .received-note {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      line-height: 2;
     }
 
     /* SUCCESS SCREEN */
@@ -532,14 +599,27 @@
 
 <!-- SCREEN: WAITING (after "I" submits) -->
 <div class="screen" id="screen-waiting">
-  <div class="waiting-symbol">◦</div>
-  <div class="screen-title">your question is <em>out there</em></div>
-  <div class="waiting-text">
-    a stranger is holding it now.<br/>
-    they will reflect it back to you.
+  <div class="waiting-pulse">◦</div>
+  <div class="waiting-your-question" id="waitingYourQuestion"></div>
+  <div class="waiting-message">
+    <span class="waiting-label">your question is out there.</span><br/>
+    a stranger is holding it.<br/>
+    they will reflect it back — not with an answer,<br/>
+    but with another question.
   </div>
-  <div class="waiting-sub">check back tomorrow</div>
-  <button class="btn-ghost btn" onclick="checkForReflection()">check for reflection</button>
+  <div class="waiting-divider"></div>
+  <button class="btn-ghost btn" onclick="checkForReflection()">has someone reflected?</button>
+</div>
+
+<!-- SCREEN: RECEIVED REFLECTION -->
+<div class="screen" id="screen-received">
+  <div class="received-label">a stranger reflected your question with</div>
+  <div class="received-question" id="receivedQuestion"></div>
+  <div class="received-note">
+    they will never know you read this.<br/>
+    you will never know who they are.
+  </div>
+  <button class="btn" onclick="showScreen('role')">ask again</button>
 </div>
 
 <!-- SCREEN: REFLECTION (for "You" role) -->
@@ -604,7 +684,7 @@
     currentScreen = name;
 
     const backBtn = document.getElementById('backBtn');
-    if (['landing', 'role', 'waiting', 'success', 'checkemail'].includes(name)) {
+    if (['landing', 'role', 'waiting', 'success', 'checkemail', 'received'].includes(name)) {
       backBtn.classList.remove('visible');
     } else {
       backBtn.classList.add('visible');
@@ -713,6 +793,8 @@
 
     if (error) { showToast('something went wrong. try again.', true); return; }
     currentQuestionId = data.id;
+    // Show their own question back to them on the waiting screen
+    document.getElementById('waitingYourQuestion').textContent = '"' + content + '"';
     showScreen('waiting');
   }
 
@@ -786,10 +868,8 @@
     if (error || !data) { showToast('could not check. try again.', true); return; }
 
     if (data.status === 'reflected' && data.reflection) {
-      document.getElementById('successTitle').innerHTML =
-        'a stranger <em>reflected</em><br/>your question';
-      document.getElementById('successSub').textContent = '"' + data.reflection + '"';
-      showScreen('success');
+      document.getElementById('receivedQuestion').textContent = data.reflection;
+      showScreen('received');
     } else {
       showToast('no reflection yet. someone will respond soon.');
     }
